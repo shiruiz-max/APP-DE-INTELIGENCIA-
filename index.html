@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#00685f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Positio Care">
+<meta name="description" content="Asistente de cuidados y cambios de posición para enfermería.">
+<title>Positio Care · Cambios posturales</title>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<style>
+:root{--teal:#00685f;--teal-d:#004d46;--bg:#f3f6f5;--card:#fff;--ink:#14211f;--mut:#5b6b68;--line:#d6e0de;--warn:#b26a00;--bad:#b3261e;--ok:#1b7a3d}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:calc(76px + env(safe-area-inset-bottom,0px));line-height:1.45}
+header{background:var(--teal);color:#fff;padding:calc(12px + env(safe-area-inset-top,0px)) 16px 12px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:5}
+header h1{font-size:1.15rem;margin:0}
+header small{display:block;opacity:.85;font-size:.78rem}
+header .sp{flex:1}
+.ib{background:rgba(255,255,255,.16);border:0;color:#fff;border-radius:10px;padding:8px 10px;font-size:1rem;cursor:pointer}
+main{max-width:720px;margin:0 auto;padding:16px}
+h2{font-size:1.3rem;margin:4px 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.hero{background:var(--teal);color:#fff;border:0;padding:20px}
+.hero .big{font-size:2.6rem;font-weight:700;line-height:1.1}
+.hero.late{background:var(--bad)}
+.hero.soon{background:var(--warn)}
+label{display:block;font-weight:600;font-size:.9rem;margin:12px 0 4px}
+input,select,textarea{width:100%;font:inherit;padding:11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+textarea{min-height:70px}
+button.pri{background:var(--teal);color:#fff;border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:700;cursor:pointer;width:100%;margin-top:14px}
+button.pri:hover{background:var(--teal-d)}
+button.sec{background:#fff;color:var(--teal);border:1px solid var(--teal);border-radius:10px;padding:8px 12px;font:inherit;font-weight:600;cursor:pointer}
+button.del{color:var(--bad);border-color:var(--bad)}
+.hero button.pri{background:#fff;color:var(--teal-d)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.8rem;font-weight:700;background:#e3f0ee;color:var(--teal-d)}
+.pill.late{background:#fbe3e1;color:var(--bad)}.pill.soon{background:#fdeccf;color:var(--warn)}
+.mut{color:var(--mut);font-size:.88rem}
+.chk{display:flex;flex-wrap:wrap;gap:8px}
+.chk label{margin:0;font-weight:500;display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:auto}
+.chk input{width:auto}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:6}
+nav a{flex:1;text-align:center;padding:9px 2px 8px;text-decoration:none;color:var(--mut);font-size:.78rem;font-weight:600}
+nav a span{display:block;font-size:1.3rem}
+nav a.on{color:var(--teal);box-shadow:inset 0 3px 0 var(--teal)}
+#toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#14211f;color:#fff;padding:11px 16px;border-radius:12px;font-weight:600;z-index:9;display:none;max-width:90%}
+#toast.err{background:var(--bad)}
+a.lnk{color:var(--teal);font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Positio Care</h1><small>Turno · Hospital General · Planta 3B / Med. Interna</small></div>
+  <span class="sp"></span>
+  <button class="ib" id="bell" title="Activar notificaciones" aria-label="Activar notificaciones">🔕</button>
+</header>
+<main id="app"></main>
+<nav>
+  <a href="#/turno" data-r="turno"><span>🛏</span>Turno</a>
+  <a href="#/registro" data-r="registro"><span>🔄</span>Registro</a>
+  <a href="#/pacientes" data-r="pacientes"><span>👥</span>Pacientes</a>
+  <a href="#/nuevo-plan" data-r="nuevo-plan"><span>📋</span>Nuevo plan</a>
+</nav>
+<div id="toast" role="status"></div>
+
+<script>
+/* ====== CONFIGURACIÓN ONESIGNAL: pega aquí tu App ID ====== */
+var ONESIGNAL_APP_ID = 'PEGAR_AQUI_TU_APP_ID';
+var OS_ON = ONESIGNAL_APP_ID.indexOf('PEGAR') < 0;
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+if (OS_ON) OneSignalDeferred.push(async function (OS) {
+  await OS.init({ appId: ONESIGNAL_APP_ID });
+  try { OS.User.addTag('unidad', '3B'); } catch (e) {}
+});
+
+/* ====== DATOS (guardados en el dispositivo) ====== */
+var KEY = 'positio.v1';
+var POS = ['Supino', 'Lateral izquierdo', 'Lateral derecho', 'Prono', 'Semisentado'];
+var db = load();
+function load() {
+  try { var d = JSON.parse(localStorage.getItem(KEY)); if (d && d.patients && d.turns) return d; } catch (e) {}
+  return { patients: [], turns: [] };
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); return true; }
+  catch (e) { toast('No se pudo guardar en este dispositivo. Revisa el espacio o el modo privado.', 1); return false; }
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function $(id) { return document.getElementById(id); }
+function fmt(ts) { return new Date(ts).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+function getP(bed) { return db.patients.find(function (p) { return p.bed === bed; }); }
+function lastTurn(bed) {
+  var t = db.turns.filter(function (x) { return x.bed === bed; });
+  return t.length ? t[t.length - 1] : null;
+}
+function dueAt(p) {
+  if (!p.plan) return null;
+  var l = lastTurn(p.bed), base = l ? Math.max(l.ts, p.plan.active) : p.plan.active;
+  return base + p.plan.interval * 60000;
+}
+function nextPos(p) {
+  var seq = p.plan && p.plan.seq.length ? p.plan.seq : POS, l = lastTurn(p.bed);
+  var i = l ? seq.indexOf(l.pos) : -1;
+  return seq[(i + 1) % seq.length];
+}
+var tt;
+function toast(m, err) {
+  var t = $('toast'); t.textContent = m; t.className = err ? 'err' : ''; t.style.display = 'block';
+  clearTimeout(tt); tt = setTimeout(function () { t.style.display = 'none'; }, 3200);
+}
+function mins(ms) { return Math.ceil(ms / 60000); }
+function human(m) { m = Math.abs(m); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; }
+
+/* ====== ACCIONES ====== */
+function logTurn(bed, pos) {
+  if (!getP(bed)) return toast('Selecciona una cama registrada.', 1);
+  db.turns.push({ bed: bed, pos: pos, ts: Date.now() });
+  if (save()) { toast('Giro registrado: cama ' + bed + ' · ' + pos + ' · ' + fmt(Date.now())); render(); }
+  else db.turns.pop();
+}
+function addPatient() {
+  var bed = $('f-bed').value.trim().toUpperCase();
+  if (!/^[A-Z0-9-]{1,10}$/.test(bed)) return toast('Usa solo letras, números o guion (máx. 10), por ejemplo 12A.', 1);
+  if (getP(bed)) return toast('La cama ' + bed + ' ya está registrada.', 1);
+  db.patients.push({ bed: bed, risk: $('f-risk').value, notes: $('f-notes').value.trim(), created: Date.now(), plan: null });
+  if (save()) { toast('Paciente de la cama ' + bed + ' registrado.'); render(); }
+  else db.patients.pop();
+}
+function delPatient(bed) {
+  if (!confirm('¿Eliminar la cama ' + bed + ' con su plan e historial?')) return;
+  db.patients = db.patients.filter(function (p) { return p.bed !== bed; });
+  db.turns = db.turns.filter(function (t) { return t.bed !== bed; });
+  save(); toast('Cama ' + bed + ' eliminada.'); render();
+}
+var planBed = '';
+function activatePlan() {
+  var bed = $('p-bed').value, p = getP(bed);
+  if (!p) return toast('Selecciona una cama.', 1);
+  var seq = POS.filter(function (x, i) { return $('pos' + i).checked; });
+  if (seq.length < 2) return toast('Elige al menos 2 posiciones para rotar.', 1);
+  var old = p.plan;
+  p.plan = { interval: parseInt($('p-int').value, 10), seq: seq, skin: $('p-skin').value.trim(), active: Date.now() };
+  if (save()) { toast('Plan guardado para la cama ' + bed + '. Cada ' + p.plan.interval + ' min.'); location.hash = '#/turno'; }
+  else p.plan = old;
+}
+function notify(title, body) {
+  try { if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body: body }); } catch (e) {}
+}
+var notified = {};
+function checkDue() {
+  var now = Date.now();
+  db.patients.forEach(function (p) {
+    var d = dueAt(p); if (!d) return;
+    var k = p.bed + '@' + d;
+    if (now >= d && !notified[k]) {
+      notified[k] = 1;
+      notify('Cambio postural · cama ' + p.bed, 'Colocar en: ' + nextPos(p));
+      if (location.hash !== '#/turno') toast('Cama ' + p.bed + ' necesita cambio postural.');
+    }
+  });
+}
+function bellState() {
+  var on = 'Notification' in window && Notification.permission === 'granted';
+  $('bell').textContent = on ? '🔔' : '🔕';
+}
+$('bell').onclick = function () {
+  if (OS_ON) OneSignalDeferred.push(async function (OS) { await OS.Notifications.requestPermission(); bellState(); });
+  else if ('Notification' in window) Notification.requestPermission().then(function () { bellState(); });
+  else toast('Este navegador no admite notificaciones.', 1);
+  if (!OS_ON) toast('Aviso: OneSignal aún no está configurado; solo habrá alertas con la app abierta.');
+};
+
+/* ====== PANTALLAS ====== */
+function vTurno() {
+  var list = db.patients.filter(function (p) { return p.plan; }).map(function (p) { return { p: p, d: dueAt(p) }; })
+    .sort(function (a, b) { return a.d - b.d; });
+  if (!list.length) return '<h2>Turno</h2><div class="card"><p>Aún no hay planes activos.</p><p class="mut">Registra una cama en <a class="lnk" href="#/pacientes">Pacientes</a> y crea su plan en <a class="lnk" href="#/nuevo-plan">Nuevo plan</a>.</p></div>';
+  var now = Date.now(), f = list[0], m = mins(f.d - now);
+  var cls = m <= 0 ? 'late' : (m <= 10 ? 'soon' : '');
+  var h = '<h2>Turno</h2><div class="card hero ' + cls + '"><div>Siguiente cambio</div><div class="big">Cama ' + esc(f.p.bed) + '</div>' +
+    '<div style="font-size:1.2rem;margin:4px 0">' + (m <= 0 ? 'Atrasado ' + human(m) : 'Faltan ' + human(m)) + '</div>' +
+    '<div>Colocar en: <b>' + esc(nextPos(f.p)) + '</b></div>' +
+    '<button class="pri" data-act="giro" data-bed="' + esc(f.p.bed) + '" data-pos="' + esc(nextPos(f.p)) + '">Registrar giro ahora</button></div>';
+  list.slice(1).forEach(function (x) {
+    var mm = mins(x.d - now), c = mm <= 0 ? 'late' : (mm <= 10 ? 'soon' : '');
+    h += '<div class="card row"><div><b>Cama ' + esc(x.p.bed) + '</b><div class="mut">Próxima: ' + esc(nextPos(x.p)) + '</div></div>' +
+      '<div style="text-align:right"><span class="pill ' + c + '">' + (mm <= 0 ? 'Atrasado ' : 'En ') + human(mm) + '</span><br>' +
+      '<button class="sec" style="margin-top:6px" data-act="giro" data-bed="' + esc(x.p.bed) + '" data-pos="' + esc(nextPos(x.p)) + '">Registrar giro</button></div></div>';
+  });
+  return h;
+}
+function vRegistro() {
+  if (!db.patients.length) return '<h2>Registro</h2><div class="card">Primero registra una cama en <a class="lnk" href="#/pacientes">Pacientes</a>.</div>';
+  var opts = db.patients.map(function (p) { return '<option>' + esc(p.bed) + '</option>'; }).join('');
+  var h = '<h2>Registro de giros</h2><div class="card"><label for="r-bed">Cama</label><select id="r-bed">' + opts + '</select>' +
+    '<label for="r-pos">Posición realizada</label><select id="r-pos">' + POS.map(function (x) { return '<option>' + x + '</option>'; }).join('') + '</select>' +
+    '<button class="pri" data-act="giro-form">Registrar giro</button><p class="mut">Se guarda con la fecha y hora actuales.</p></div><h2>Historial</h2>';
+  var t = db.turns.slice().reverse().slice(0, 60);
+  if (!t.length) h += '<div class="card mut">Todavía no hay giros registrados.</div>';
+  t.forEach(function (x) { h += '<div class="card row"><div><b>Cama ' + esc(x.bed) + '</b> · ' + esc(x.pos) + '</div><div class="mut">' + fmt(x.ts) + '</div></div>'; });
+  return h;
+}
+function vPacientes() {
+  var h = '<h2>Pacientes</h2><div class="card"><b>Registrar paciente</b>' +
+    '<label for="f-bed">Número de cama o código</label><input id="f-bed" maxlength="10" placeholder="Ej. 12A" autocapitalize="characters">' +
+    '<label for="f-risk">Riesgo de lesión por presión</label><select id="f-risk"><option>Bajo</option><option selected>Medio</option><option>Alto</option></select>' +
+    '<label for="f-notes">Observaciones (sin nombres)</label><textarea id="f-notes" placeholder="Ej. Piel íntegra, dolor en cadera derecha"></textarea>' +
+    '<button class="pri" data-act="add-p">Registrar paciente</button></div>';
+  if (!db.patients.length) return h + '<div class="card mut">No hay pacientes registrados.</div>';
+  db.patients.slice().sort(function (a, b) { return a.bed.localeCompare(b.bed, 'es', { numeric: true }); }).forEach(function (p) {
+    var l = lastTurn(p.bed);
+    h += '<div class="card"><div class="row"><b style="font-size:1.15rem">Cama ' + esc(p.bed) + '</b><span class="pill">Riesgo ' + esc(p.risk.toLowerCase()) + '</span></div>' +
+      (p.notes ? '<div class="mut">' + esc(p.notes) + '</div>' : '') +
+      '<div style="margin-top:8px">Plan: ' + (p.plan ? 'cada ' + p.plan.interval + ' min · ' + esc(p.plan.seq.join(' → ')) : '<span class="mut">sin plan</span>') + '</div>' +
+      '<div class="mut">Último giro: ' + (l ? esc(l.pos) + ' · ' + fmt(l.ts) : 'sin registros') + '</div>' +
+      '<div class="row" style="margin-top:10px;justify-content:flex-start"><a class="lnk" href="#/nuevo-plan" data-act="plan-for" data-bed="' + esc(p.bed) + '">' + (p.plan ? 'Editar plan' : 'Crear plan') + '</a>' +
+      '<button class="sec del" data-act="del-p" data-bed="' + esc(p.bed) + '">Eliminar</button></div></div>';
+  });
+  return h;
+}
+function vPlan() {
+  if (!db.patients.length) return '<h2>Nuevo plan</h2><div class="card">Primero registra una cama en <a class="lnk" href="#/pacientes">Pacientes</a>.</div>';
+  if (!getP(planBed)) planBed = db.patients[0].bed;
+  var p = getP(planBed), pl = p.plan || { interval: 120, seq: ['Supino', 'Lateral izquierdo', 'Lateral derecho'], skin: '' };
+  var opts = db.patients.map(function (x) { return '<option' + (x.bed === planBed ? ' selected' : '') + '>' + esc(x.bed) + '</option>'; }).join('');
+  var ints = [30, 60, 90, 120, 180, 240].map(function (m) { return '<option value="' + m + '"' + (m === pl.interval ? ' selected' : '') + '>Cada ' + human(m) + '</option>'; }).join('');
+  var ch = POS.map(function (x, i) { return '<label><input type="checkbox" id="pos' + i + '"' + (pl.seq.indexOf(x) >= 0 ? ' checked' : '') + '>' + x + '</label>'; }).join('');
+  return '<h2>Nuevo plan de cuidados</h2><div class="card"><label for="p-bed">Cama</label><select id="p-bed">' + opts + '</select>' +
+    '<label for="p-int">Frecuencia de cambio</label><select id="p-int">' + ints + '</select>' +
+    '<label>Posiciones a rotar</label><div class="chk">' + ch + '</div>' +
+    '<label for="p-skin">Cuidados de la piel / observaciones</label><textarea id="p-skin">' + esc(pl.skin) + '</textarea>' +
+    '<button class="pri" data-act="activar">Activar plan</button></div>';
+}
+var routes = { turno: vTurno, registro: vRegistro, pacientes: vPacientes, 'nuevo-plan': vPlan };
+function render() {
+  var r = (location.hash.replace('#/', '') || 'turno');
+  if (!routes[r]) r = 'turno';
+  var y = window.scrollY;
+  $('app').innerHTML = routes[r]();
+  document.querySelectorAll('nav a').forEach(function (a) { a.classList.toggle('on', a.dataset.r === r); });
+  var sel = $('p-bed'); if (sel) sel.onchange = function () { planBed = sel.value; render(); };
+  window.scrollTo(0, r === 'turno' ? y : 0);
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-act]'); if (!b) return;
+  var a = b.dataset.act;
+  if (a === 'giro') logTurn(b.dataset.bed, b.dataset.pos);
+  else if (a === 'giro-form') logTurn($('r-bed').value, $('r-pos').value);
+  else if (a === 'add-p') addPatient();
+  else if (a === 'del-p') delPatient(b.dataset.bed);
+  else if (a === 'activar') activatePlan();
+  else if (a === 'plan-for') planBed = b.dataset.bed;
+});
+window.addEventListener('hashchange', render);
+if (!location.hash) location.hash = '#/turno';
+render(); bellState(); checkDue();
+setInterval(function () { checkDue(); if (location.hash === '#/turno' || !location.hash) render(); }, 20000);
+if ('serviceWorker' in navigator && !OS_ON) { /* OneSignal registra su propio service worker al configurarse */ }
+</script>
+</body>
+</html>
